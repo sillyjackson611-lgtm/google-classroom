@@ -225,46 +225,97 @@ updateClock();
 setInterval(updateClock, 30000);
 
 const browserForm = $("#browserForm");
-browserForm.addEventListener("submit", async e => {
-  e.preventDefault();
+
+async function openInDesktop(url) {
   openWindow("browserWindow");
+
+  $("#url").value = url;
   $("#go").disabled = true;
-  $("#status").textContent = "Loading website…";
+  $("#status").textContent = "Loading through your web proxy…";
   $("#result").replaceChildren();
 
   try {
     const r = await fetch("/api/fetch", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ url: $("#url").value })
+      body: JSON.stringify({ url })
     });
-    const d = await r.json();
-    if (!r.ok) throw new Error(d.error || "Request failed");
 
+    const d = await r.json();
+    if (!r.ok) throw new Error(d.error || "Unable to load website.");
+
+    $("#url").value = d.url;
     $("#status").textContent = d.title + " · " + d.url;
+
     const template = document.createElement("template");
     template.innerHTML = d.html;
 
+    // Route website links back into the desktop browser.
     for (const a of template.content.querySelectorAll("a[href]")) {
       try {
         const dest = new URL(a.getAttribute("href"), d.url);
+
         if (!["http:", "https:"].includes(dest.protocol)) {
           a.removeAttribute("href");
           continue;
         }
+
         a.href = dest.href;
-        a.target = "_blank";
+        a.removeAttribute("target");
         a.rel = "noopener noreferrer";
       } catch {
         a.removeAttribute("href");
       }
     }
-    $("#result").append(template.content);
+
+    $("#result").replaceChildren(template.content);
   } catch (err) {
-    $("#status").textContent = err.message || "Unable to load website.";
+    $("#status").textContent =
+      err.message || "Unable to load this website.";
   } finally {
     $("#go").disabled = false;
   }
+}
+
+browserForm.addEventListener("submit", e => {
+  e.preventDefault();
+  openInDesktop($("#url").value.trim());
+});
+
+// Clicking a link in a proxied page loads it in the same window.
+$("#result").addEventListener("click", e => {
+  const a = e.target.closest("a[href]");
+  if (!a || !$("#result").contains(a)) return;
+
+  e.preventDefault();
+  openInDesktop(a.href);
+});
+
+// Search-result links also open inside the desktop.
+$("#resultsArea").addEventListener("click", e => {
+  const a = e.target.closest("a[href]");
+  if (!a || !$("#resultsArea").contains(a)) return;
+
+  let dest;
+  try {
+    dest = new URL(a.href);
+  } catch {
+    return;
+  }
+
+  if (!["http:", "https:"].includes(dest.protocol)) return;
+
+  e.preventDefault();
+  openInDesktop(dest.href);
+});
+
+// Quick links open in the desktop too.
+document.querySelector(".quicklinks").addEventListener("click", e => {
+  const a = e.target.closest("a[href]");
+  if (!a) return;
+
+  e.preventDefault();
+  openInDesktop(a.href);
 });
 
 document.addEventListener("keydown", e => {
