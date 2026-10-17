@@ -38,7 +38,12 @@ button:disabled{opacity:.6}
 <header><div class="logo">G</div><h1>google_<span>classroom</span></h1>
 <p>Your web viewer. A clean, neon-powered experience.</p></header>
 <section class="panel">
-<form id="form">
+<form action="/search" method="get">
+  <label for="q">SEARCH THE WEB</label>
+  <input id="q" name="q" type="search"
+         placeholder="Search anything..." required>
+  <button type="submit">SEARCH ↗</button>
+</form>
 <label for="url">WEBSITE ADDRESS</label>
 <input id="url" type="url" required value="https://www.wikipedia.org" placeholder="https://example.com">
 <button id="go">OPEN WEBSITE ↗</button>
@@ -75,8 +80,76 @@ $("#form").addEventListener("submit",async e=>{
 });
 </script>
 </body></html>`;
-
 app.get("/", (_req, res) => res.type("html").send(page));
+Replace that line with this search route:
+
+
+javascript
+app.get("/", (_req, res) => res.type("html").send(page));
+
+app.get("/search", async (req, res) => {
+  const q = String(req.query.q || "").trim().slice(0, 200);
+
+  if (!q) {
+    return res.redirect("/");
+  }
+
+  const searchUrl =
+    "https://html.duckduckgo.com/html/?q=" + encodeURIComponent(q);
+
+  try {
+    const response = await fetch(searchUrl, {
+      signal: AbortSignal.timeout(8000),
+      headers: { "User-Agent": "Mozilla/5.0" }
+    });
+
+    if (!response.ok) {
+      return res.status(502).send("Search is temporarily unavailable.");
+    }
+
+    const source = await response.text();
+
+    const html = sanitizeHtml(source, {
+      allowedTags: [
+        "div", "a", "span", "p", "b", "strong", "br"
+      ],
+      allowedAttributes: {
+        a: ["href", "class"]
+      },
+      allowedSchemes: ["http", "https"]
+    });
+
+    res.type("html").send(`<!doctype html>
+      <html>
+      <head>
+        <meta charset="utf-8">
+        <meta name="viewport" content="width=device-width,initial-scale=1">
+        <title>Search: ${q.replace(/[&<>"]/g, "")}</title>
+        <style>
+          body{background:#0b0714;color:#f7f0ff;font:16px Arial;
+          max-width:800px;margin:40px auto;padding:20px}
+          a{color:#c084fc}
+          input{background:#191226;color:white;padding:12px;
+          border:1px solid #8546bd;border-radius:10px;width:70%}
+          button{padding:12px;background:#9333ea;color:white;border:0;
+          border-radius:10px}
+        </style>
+      </head>
+      <body>
+        <h1>google_classroom</h1>
+        <form action="/search">
+          <input name="q" value="${q.replace(/&/g,"&amp;").replace(/"/g,"&quot;").replace(/</g,"&lt;").replace(/>/g,"&gt;")}">
+          <button>Search</button>
+        </form>
+        <hr>
+        <p>Search results from DuckDuckGo:</p>
+        ${html}
+      </body>
+      </html>`);
+  } catch {
+    res.status(502).send("Couldn't load search results. Please try again.");
+  }
+});;
 app.get("/health", (_req, res) => res.json({ ok: true }));
 
 app.post("/api/fetch", async (req, res) => {
