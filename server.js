@@ -1,442 +1,283 @@
 import express from "express";
 import rateLimit from "express-rate-limit";
-import sanitizeHtml from "sanitize-html";
-import dns from "node:dns/promises";
-import net from "node:net";
 
 const app = express();
 const PORT = process.env.PORT || 3000;
 
 app.disable("x-powered-by");
 app.use(express.json({ limit: "2kb" }));
-app.use("/api", rateLimit({ windowMs: 60_000, limit: 20 }));
+app.use("/api", rateLimit({ windowMs: 60_000, limit: 30 }));
 
-const page = `<!doctype html>
+const page = `<!DOCTYPE html>
 <html lang="en">
 <head>
-<meta charset="utf-8">
+<meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Google Search</title>
+<title>Desktop OS</title>
 <style>
 *{box-sizing:border-box}
-body{margin:0;font:14px Arial,sans-serif;color:#202124;background:white;min-height:100vh}
-.topbar{height:60px;display:flex;justify-content:flex-end;align-items:center;gap:20px;padding:0 28px}
-.topbar a{color:#202124;text-decoration:none;font-size:13px}
-.avatar{background:#1a73e8;color:white;border-radius:50%;width:34px;height:34px;display:grid;place-items:center;font-weight:bold}
-.home{min-height:calc(100vh - 60px);display:flex;flex-direction:column}
-.main{text-align:center;padding:95px 20px 30px;flex:1}
-.logo{font-size:76px;font-weight:500;letter-spacing:-5px;margin-bottom:28px}
-.b{color:#4285f4}.r{color:#ea4335}.y{color:#fbbc05}.g{color:#34a853}
-.search{height:48px;width:min(584px,100%);border:1px solid #dfe1e5;border-radius:28px;display:flex;align-items:center;gap:12px;padding:0 16px;margin:auto}
-.search:hover,.search:focus-within{box-shadow:0 1px 6px #20212447;border-color:transparent}
-.glass{width:16px;height:16px;border:2px solid #9aa0a6;border-radius:50%;position:relative;flex-shrink:0}
-.glass:after{content:"";position:absolute;width:7px;height:2px;background:#9aa0a6;right:-5px;bottom:-2px;transform:rotate(45deg)}
-.search input{border:0;outline:0;flex:1;min-width:0;font-size:16px;background:transparent;color:#202124}
-.buttons{display:flex;justify-content:center;gap:12px;margin:28px}
-.btn{background:#f8f9fa;color:#3c4043;border:1px solid #f8f9fa;border-radius:4px;padding:10px 16px;cursor:pointer}
-.btn:hover{border-color:#dadce0;box-shadow:0 1px 1px #0001}
-.shortcuts{display:flex;justify-content:center;gap:12px;flex-wrap:wrap;margin:24px auto}
-.shortcuts a{background:#f8f9fa;color:#3c4043;padding:10px 14px;border-radius:22px;text-decoration:none}
-.results{width:min(650px,100%);margin:25px auto;text-align:left;padding:0 10px;overflow-wrap:anywhere}
-.results-heading{color:#70757a;margin-bottom:24px}
-.result{margin-bottom:25px}
-.result a{color:#1a0dab;text-decoration:none;font-size:20px}
-.result a:hover{text-decoration:underline}
-.result__url{font-size:14px;margin:5px 0;color:#202124}
-.result__snippet{color:#4d5156;font-size:14px;line-height:1.55;margin-top:5px}
-.no-results{color:#5f6368;line-height:1.6}
-.footer{background:#f2f2f2;color:#70757a;padding:16px 28px;margin-top:auto}
-.footer a{color:#70757a;text-decoration:none;margin-right:18px}
-.footer-bottom{border-top:1px solid #dadce0;margin-top:14px;padding-top:14px;display:flex;justify-content:space-between;gap:12px;flex-wrap:wrap}
-.browser{display:none;min-height:calc(100vh - 60px)}
-.browser.active{display:block}
-#home.hidden{display:none}
-.browserbar{display:flex;gap:10px;padding:12px;border-bottom:1px solid #dadce0}
-.browserbar input{flex:1;min-width:0;border:1px solid #dadce0;border-radius:25px;padding:12px}
-.viewer{padding:20px;line-height:1.7;overflow-wrap:anywhere}
-.viewer img{max-width:100%;height:auto}
-.status{color:#5f6368}
+body{margin:0;font:14px Arial;color:#f5f7ff}
+button,input{font:inherit}
+button{cursor:pointer}
+.desktop{
+ height:100vh;overflow:hidden;position:relative;
+ background:radial-gradient(ellipse at 20% 20%,#315a9b,transparent 42%),
+ radial-gradient(ellipse at 80% 70%,#543f91,transparent 40%),
+ linear-gradient(135deg,#10172b,#182b4c 55%,#111827)
+}
+.desktop-icons{position:absolute;top:18px;left:14px;display:grid;gap:8px}
+.shortcut{width:82px;border:1px solid transparent;background:transparent;
+ color:white;border-radius:9px;padding:9px 4px;display:flex;
+ flex-direction:column;align-items:center;gap:7px}
+.shortcut:hover{background:#ffffff18}
+.appicon{font-size:29px;line-height:1.3}
+.shortcut span:last-child{font-size:12px}
+.taskbar{position:absolute;bottom:0;left:0;right:0;height:54px;
+ display:flex;align-items:center;justify-content:center;gap:8px;
+ background:#111827ef;border-top:1px solid #ffffff25;z-index:1000}
+.taskbutton{border:0;border-radius:9px;background:#ffffff12;color:white;padding:9px 13px}
+.taskbutton:hover,.taskbutton.active{background:#ffffff30}
+.clock{position:absolute;right:16px;font-size:12px}
+.startmenu{display:none;position:absolute;bottom:64px;left:50%;
+ transform:translateX(-50%);width:min(360px,94vw);padding:20px;
+ background:#1b2438f5;border:1px solid #ffffff25;border-radius:16px;z-index:1100}
+.startmenu.open{display:block}
+.startgrid{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}
+.startgrid button{border:0;border-radius:10px;padding:15px 4px;background:#ffffff10;color:white}
+.window{position:absolute;z-index:10;left:12%;top:9%;
+ width:min(850px,84vw);height:min(570px,78vh);min-width:290px;
+ min-height:230px;display:flex;flex-direction:column;
+ background:#f5f7fb;color:#172033;border:1px solid #ffffff66;
+ border-radius:12px;overflow:hidden;box-shadow:0 22px 70px #0006}
+.window.hidden{display:none}
+.titlebar{height:44px;flex-shrink:0;display:flex;align-items:center;
+ gap:12px;padding:0 12px;background:#e7ebf3;
+ border-bottom:1px solid #d4dae5;cursor:move;user-select:none}
+.windowtitle{font-size:13px;font-weight:600;flex:1}
+.wincontrols{display:flex;gap:6px}
+.wincontrols button{width:29px;height:27px;border:0;border-radius:6px;background:#d7deea;color:#172033}
+.wincontrols button:last-child{background:#d95361;color:white}
+.windowbody{flex:1;min-height:0;display:flex;flex-direction:column}
+.homeview{overflow:auto;padding:24px;flex:1}
+.homeview h1{font-size:27px;margin:0 0 8px}
+.sub{color:#657087;font-size:14px;line-height:1.6}
+.searchrow{display:flex;gap:8px;margin:22px 0}
+.searchrow input{min-width:0;flex:1;padding:13px;border:1px solid #ccd4e2;border-radius:9px}
+.action{border:0;background:#356ac0;color:white;border-radius:8px;padding:11px 15px}
+.action:hover{background:#2857a1}
+.appgrid{display:grid;grid-template-columns:repeat(auto-fit,minmax(125px,1fr));gap:12px}
+.appcard{padding:15px 12px;text-align:left;border:1px solid #dce2ec;background:white;color:#172033;border-radius:12px}
+.appcard:hover{background:#edf3ff;border-color:#a9c3ef}
+.appcard .appicon{display:block;margin-bottom:10px}
+.appcard strong{font-size:13px}
+.appcard p{font-size:12px;color:#69748a;margin-bottom:0}
+.toolbar{display:flex;align-items:center;gap:7px;padding:10px;background:#edf0f6;border-bottom:1px solid #d8deea}
+.toolbar button{border:0;border-radius:7px;padding:9px 11px;background:#dce3ef;color:#243149}
+.toolbar input{width:100%;min-width:0;border:1px solid #cbd3e0;border-radius:8px;background:white;color:#172033;padding:10px}
+.browserstatus{padding:8px 12px;font-size:12px;color:#68758b;background:#f5f7fb;border-bottom:1px solid #e0e5ed;overflow-wrap:anywhere}
+.browserbody{flex:1;min-height:0;display:flex;flex-direction:column;background:white;overflow:auto}
+.webframe{width:100%;height:100%;flex:1;border:0;background:white;min-height:300px}
+.browserhint{padding:20px;color:#27344c;font-size:14px;line-height:1.7;overflow:auto}
+.browserhint a{color:#245fba;overflow-wrap:anywhere}
+.filelist{display:grid;gap:8px}
+.fileitem{padding:13px;border:1px solid #e0e5ed;background:white;border-radius:8px}
+.settingsrow{padding:14px 0;border-bottom:1px solid #e0e5ed}
+.searchresults{margin-top:20px}
+.searchresults article{padding:12px 0;border-bottom:1px solid #e0e5ed;overflow-wrap:anywhere}
+.searchresults a{color:#215db2;font-size:17px;text-decoration:none}
+.searchresults p{font-size:13px;color:#5d687c;line-height:1.6}
 @media(max-width:600px){
- .main{padding-top:90px}
- .logo{font-size:64px}
- .topbar{padding:0 16px}
- .footer{padding:15px}
+ .window{left:3%;top:5%;width:94%;height:82vh}
+ .desktop-icons{left:5px;top:8px}
+ .taskbar{justify-content:flex-start;overflow-x:auto}
+ .clock{display:none}.homeview{padding:17px}
+ .toolbar{gap:5px;padding:7px}
 }
 </style>
 </head>
 <body>
-<header class="topbar">
-<a href="https://mail.google.com">Gmail</a>
-<a href="https://images.google.com">Images</a>
-<div class="avatar">G</div>
-</header>
+<div class="desktop" id="desktop">
+ <div class="desktop-icons">
+  <button class="shortcut" data-app="home"><span class="appicon">🖥️</span><span>This PC</span></button>
+  <button class="shortcut" data-app="browser"><span class="appicon">🌐</span><span>Browser</span></button>
+  <button class="shortcut" data-app="files"><span class="appicon">📁</span><span>Files</span></button>
+  <button class="shortcut" data-app="settings"><span class="appicon">⚙️</span><span>Settings</span></button>
+ </div>
 
-<main id="home" class="home">
-<section class="main">
-<div class="logo" aria-label="Google"><span class="b">G</span><span class="r">o</span><span class="y">o</span><span class="b">g</span><span class="g">l</span><span class="r">e</span></div>
-<form action="/search" method="get">
-<div class="search">
-<span class="glass"></span>
-<input name="q" id="q" type="search" maxlength="200" placeholder="Search Google or type a URL" value="__QUERY__" required>
-</div>
-<div class="buttons">
-<button class="btn" type="submit">Google Search</button>
-<button class="btn" type="button" id="lucky">I'm Feeling Lucky</button>
-</div>
-</form>
-<nav class="shortcuts">
-<a href="https://www.youtube.com">▶ YouTube</a>
-<a href="https://www.wikipedia.org">Wikipedia</a>
-<a href="https://github.com">GitHub</a>
-<a href="https://www.reddit.com">Reddit</a>
-</nav>
-<div id="resultsArea">__RESULTS__</div>
-</section>
-<footer class="footer">
-<div>Web Search</div>
-<div class="footer-bottom">
-<div><a href="https://about.google">About</a><a href="https://policies.google.com/privacy">Privacy</a><a href="https://policies.google.com/terms">Terms</a></div>
-<span>Search results powered by DuckDuckGo</span>
-</div>
-</footer>
-</main>
+ <section class="window" id="home" style="z-index:20">
+  <header class="titlebar"><span>🖥️</span><span class="windowtitle">Desktop Hub</span>
+   <div class="wincontrols">
+    <button data-min="home">—</button><button data-max="home">□</button><button data-close="home">×</button>
+   </div>
+  </header>
+  <div class="windowbody"><div class="homeview">
+   <h1>Welcome to your desktop</h1>
+   <p class="sub">Your apps, files, and web browsing in one place.</p>
+   <form class="searchrow" id="searchForm">
+    <input id="searchInput" maxlength="200" placeholder="Search the web or enter a website">
+    <button class="action">Search</button>
+   </form>
+   <div class="appgrid">
+    <button class="appcard" data-app="browser"><span class="appicon">🌐</span><strong>Web Browser</strong><p>Visit websites</p></button>
+    <button class="appcard" data-app="files"><span class="appicon">📁</span><strong>File Explorer</strong><p>Your workspace</p></button>
+    <button class="appcard" data-app="settings"><span class="appicon">⚙️</span><strong>Settings</strong><p>Desktop preferences</p></button>
+    <button class="appcard" data-site="https://www.wikipedia.org"><span class="appicon">📚</span><strong>Wikipedia</strong><p>Knowledge</p></button>
+    <button class="appcard" data-site="https://www.youtube.com"><span class="appicon">▶️</span><strong>YouTube</strong><p>Videos</p></button>
+    <button class="appcard" data-site="https://github.com"><span class="appicon">💻</span><strong>GitHub</strong><p>Code and projects</p></button>
+   </div>
+   <div class="searchresults" id="searchResults"></div>
+  </div></div>
+ </section>
 
-<section id="browser" class="browser">
-<form id="browserForm" class="browserbar">
-<button class="btn" id="back" type="button">← Home</button>
-<input id="url" type="url" placeholder="https://example.com" required>
-<button class="btn" id="go" type="submit">Go</button>
-</form>
-<div class="viewer">
-<p id="status" class="status">Enter a public website address.</p>
-<div id="result"></div>
+ <section class="window hidden" id="browser">
+  <header class="titlebar"><span>🌐</span><span class="windowtitle">Web Browser</span>
+   <div class="wincontrols"><button data-min="browser">—</button><button data-max="browser">□</button><button data-close="browser">×</button></div>
+  </header>
+  <div class="windowbody">
+   <form class="toolbar" id="browserForm">
+    <button type="button" id="browserBack">⌂</button>
+    <input id="address" placeholder="https://example.com">
+    <button class="action">Go</button>
+   </form>
+   <div class="browserstatus" id="browserStatus">Ready. Enter a website address.</div>
+   <div class="browserbody" id="browserBody">
+    <div class="browserhint"><h2>Your browser</h2><p>Enter a website address above.</p></div>
+   </div>
+  </div>
+ </section>
+
+ <section class="window hidden" id="files">
+  <header class="titlebar"><span>📁</span><span class="windowtitle">File Explorer</span>
+   <div class="wincontrols"><button data-min="files">—</button><button data-max="files">□</button><button data-close="files">×</button></div>
+  </header>
+  <div class="windowbody"><div class="homeview">
+   <h1>File Explorer</h1><p class="sub">Desktop workspace</p>
+   <div class="filelist">
+    <div class="fileitem">🖥️ &nbsp; Desktop</div>
+    <div class="fileitem">📄 &nbsp; Documents</div>
+    <div class="fileitem">⬇️ &nbsp; Downloads</div>
+    <div class="fileitem">🖼️ &nbsp; Pictures</div>
+   </div>
+   <p class="sub">These are visual shortcuts, not your actual computer files.</p>
+  </div></div>
+ </section>
+
+ <section class="window hidden" id="settings">
+  <header class="titlebar"><span>⚙️</span><span class="windowtitle">Settings</span>
+   <div class="wincontrols"><button data-min="settings">—</button><button data-max="settings">□</button><button data-close="settings">×</button></div>
+  </header>
+  <div class="windowbody"><div class="homeview">
+   <h1>Settings</h1><p class="sub">Desktop preferences</p>
+   <div class="settingsrow"><strong>Appearance</strong><p class="sub">Dark blue desktop theme</p><button class="action" id="wallpaper">Change wallpaper</button></div>
+   <div class="settingsrow"><strong>Web browsing</strong><p class="sub">Some websites block embedded browsing. Open them in a separate tab if needed.</p></div>
+  </div></div>
+ </section>
+
+ <div class="startmenu" id="startMenu">
+  <h2>Desktop apps</h2>
+  <div class="startgrid">
+   <button data-app="home">🖥️<br>Desktop</button>
+   <button data-app="browser">🌐<br>Browser</button>
+   <button data-app="files">📁<br>Files</button>
+   <button data-app="settings">⚙️<br>Settings</button>
+  </div>
+ </div>
+
+ <footer class="taskbar">
+  <button class="taskbutton" id="startButton">⊞</button>
+  <button class="taskbutton" data-app="home">🖥️</button>
+  <button class="taskbutton" data-app="browser">🌐</button>
+  <button class="taskbutton" data-app="files">📁</button>
+  <button class="taskbutton" data-app="settings">⚙️</button>
+  <div class="clock" id="clock"></div>
+ </footer>
 </div>
-</section>
 
 <script>
-const $=s=>document.querySelector(s);
+const $ = s => document.querySelector(s);
+let topZ = 30;
+const positions = new Map();
 
-function showHome(){
- $("#home").classList.remove("hidden");
- $("#browser").classList.remove("active");
- window.scrollTo(0,0);
+function showApp(id) {
+ const el = document.getElementById(id);
+ if (!el) return;
+ el.classList.remove("hidden");
+ el.style.zIndex = ++topZ;
+ $("#startMenu").classList.remove("open");
+ document.querySelectorAll(".taskbutton[data-app]").forEach(b =>
+  b.classList.toggle("active", b.dataset.app === id)
+ );
 }
-function showBrowser(){
- $("#home").classList.add("hidden");
- $("#browser").classList.add("active");
- window.scrollTo(0,0);
+function hideApp(id) {
+ const el = document.getElementById(id);
+ if (el) el.classList.add("hidden");
 }
-$("#back").addEventListener("click",showHome);
-
-async function openInDesktop(url){
- showBrowser();
- $("#url").value=url;
- $("#go").disabled=true;
- $("#status").textContent="Loading website...";
- $("#result").replaceChildren();
-
- try{
-  const response=await fetch("/api/fetch",{
-   method:"POST",
-   headers:{"Content-Type":"application/json"},
-   body:JSON.stringify({url})
-  });
-  const data=await response.json();
-  if(!response.ok)throw new Error(data.error||"Unable to load website.");
-
-  $("#url").value=data.url;
-  $("#status").textContent=data.title+" · "+data.url;
-
-  const template=document.createElement("template");
-  template.innerHTML=data.html;
-
-  for(const a of template.content.querySelectorAll("a[href]")){
-   try{
-    const dest=new URL(a.getAttribute("href"),data.url);
-    if(!["http:","https:"].includes(dest.protocol)){
-     a.removeAttribute("href");
-     continue;
-    }
-    a.href=dest.href;
-   }catch{a.removeAttribute("href");}
-  }
-  $("#result").replaceChildren(template.content);
- }catch(error){
-  $("#status").textContent=error.message||"Unable to load website.";
- }finally{
-  $("#go").disabled=false;
+function openSite(raw) {
+ let url;
+ try {
+  const value = raw.trim();
+  if (!value) return;
+  url = new URL(/^[a-zA-Z][a-zA-Z\\d+.-]*:/.test(value) ? value : "https://" + value);
+  if (!["http:","https:"].includes(url.protocol)) throw Error();
+ } catch {
+  showApp("browser");
+  $("#browserStatus").textContent = "Enter a valid website address.";
+  return;
  }
+
+ showApp("browser");
+ $("#address").value = url.href;
+ $("#browserStatus").textContent = "Opening " + url.hostname;
+ const body = $("#browserBody");
+ body.replaceChildren();
+
+ const frame = document.createElement("iframe");
+ frame.className = "webframe";
+ frame.title = "Website preview";
+ frame.referrerPolicy = "no-referrer";
+ frame.src = url.href;
+ body.append(frame);
+
+ const hint = document.createElement("div");
+ hint.className = "browserhint";
+ hint.innerHTML = "<strong>If the site doesn't appear</strong><p>Some websites block embedded browsing. Use the link below to open the full site.</p>";
+
+ const link = document.createElement("a");
+ link.href = url.href;
+ link.target = "_blank";
+ link.rel = "noopener noreferrer";
+ link.textContent = "Open " + url.hostname + " in a new tab ↗";
+ hint.append(link);
+ body.append(hint);
 }
-
-$("#browserForm").addEventListener("submit",e=>{
- e.preventDefault();
- openInDesktop($("#url").value.trim());
-});
-
-$("#result").addEventListener("click",e=>{
- const a=e.target.closest("a[href]");
- if(!a||!$("#result").contains(a))return;
- e.preventDefault();
- openInDesktop(a.href);
-});
-
-$("#resultsArea").addEventListener("click",e=>{
- const a=e.target.closest("a[href]");
- if(!a||!$("#resultsArea").contains(a))return;
- let u;
- try{u=new URL(a.href);}catch{return;}
- if(!["http:","https:"].includes(u.protocol))return;
- e.preventDefault();
- openInDesktop(u.href);
-});
-
-document.querySelector(".shortcuts").addEventListener("click",e=>{
- const a=e.target.closest("a[href]");
- if(!a)return;
- e.preventDefault();
- openInDesktop(a.href);
-});
-
-$("#lucky").addEventListener("click",async()=>{
- const q=$("#q").value.trim();
- if(!q){$("#q").focus();return;}
- try{
-  const r=await fetch("/api/lucky?q="+encodeURIComponent(q));
-  const d=await r.json();
-  if(!r.ok)throw new Error();
-  openInDesktop(d.url);
- }catch{
-  const f=document.createElement("form");
-  f.method="GET";
-  f.action="/search";
-  const i=document.createElement("input");
-  i.name="q";i.value=q;
-  f.append(i);document.body.append(f);f.submit();
- }
-});
 </script>
 </body>
-</html>`;
+</html>`;app.get("/", (_req, res) => res.type("html").send(page));
 
-function escapeHtml(value) {
- return String(value).replace(/[&<>"']/g, c => ({
-  "&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"
- })[c]);
-}
+app.get("/api/search", async (req, res) => {
+ const q = String(req.query.q || "").trim().slice(0,200);
+ if (!q) return res.status(400).json({error:"Enter a search."});
 
-function renderPage(query="",results="") {
- return page
-  .replaceAll("__QUERY__",escapeHtml(query))
-  .replace("__RESULTS__",results);
-}
-
-app.get("/",(_req,res)=>{
- res.type("html").send(renderPage());
-});
-
-app.get("/search",async(req,res)=>{
- const q=String(req.query.q||"").trim().slice(0,200);
- if(!q)return res.redirect("/");
-
- try{
-  const response=await fetch(
-   "https://html.duckduckgo.com/html/?q="+encodeURIComponent(q),
-   {signal:AbortSignal.timeout(10000),headers:{"User-Agent":"Mozilla/5.0"}}
+ try {
+  const response = await fetch(
+   "https://html.duckduckgo.com/html/?q=" + encodeURIComponent(q),
+   {
+    signal: AbortSignal.timeout(10000),
+    headers: {"User-Agent":"Mozilla/5.0"}
+   }
   );
-  if(!response.ok)throw new Error("Search unavailable");
 
-  const source=await response.text();
-  const results=sanitizeHtml(source,{
-   allowedTags:["div","a","span","p","b","strong","br","h2","h3","ol","li"],
-   allowedAttributes:{a:["href","class","title"],div:["class"],span:["class"],ol:["class"]},
-   allowedSchemes:["http","https"],
-   transformTags:{
-    a:(tag,attrs)=>{
-     let href="";
-     try{
-      const u=new URL(attrs.href||"","https://html.duckduckgo.com");
-      if(["http:","https:"].includes(u.protocol))href=u.href;
-     }catch{}
-     return {tagName:tag,attribs:{
-      ...(attrs.class?{class:attrs.class}:{}),
-      ...(attrs.title?{title:attrs.title}:{}),
-      ...(href?{href}: {})
-     }};
-    }
-   }
-  });
+  if (!response.ok) throw Error("Search provider unavailable");
 
-  const styled='<div class="results"><p class="results-heading">Search results for: '+escapeHtml(q)+'</p>'+results+'</div>';
-  res.type("html").send(renderPage(q,styled));
- }catch{
-  res.status(502).type("html").send(renderPage(q,
-   '<div class="results"><p class="no-results">Search is temporarily unavailable. Please try again.</p></div>'
-  ));
- }
-});
+  const html = await response.text();
+  const results = [];
+  const pattern = /<a[^>]*class="result__a"[^>]*href="([^"]+)"[^>]*>([\s\S]*?)<\/a>/gi;
+  let match;
 
-app.get("/api/lucky",async(req,res)=>{
- const q=String(req.query.q||"").trim().slice(0,200);
- if(!q)return res.status(400).json({error:"Enter a search."});
+  while ((match = pattern.exec(html)) && results.length < 10) {
+   let url;
 
- try{
-  const r=await fetch("https://html.duckduckgo.com/html/?q="+encodeURIComponent(q),{
-   signal:AbortSignal.timeout(8000),
-   headers:{"User-Agent":"Mozilla/5.0"}
-  });
-  if(!r.ok)throw new Error();
-  const html=await r.text();
-  const match=html.match(/class="result__a"[^>]*href="([^"]+)"/i);
-  if(!match)throw new Error();
-
-  let url=match[1].replace(/&amp;/g,"&");
-  url=new URL(url,"https://html.duckduckgo.com").href;
-  const parsed=new URL(url);
-  if(parsed.hostname.endsWith("duckduckgo.com")){
-   const destination=parsed.searchParams.get("uddg");
-   if(destination)url=destination;
-  }
-  const target=new URL(url);
-  if(!["http:","https:"].includes(target.protocol))throw new Error();
-  res.json({url:target.href});
- }catch{
-  res.status(502).json({error:"Could not find a result."});
- }
-});
-
-app.get("/health",(_req,res)=>res.json({ok:true}));
-
-function isPrivateIPv4(ip){
- const p=ip.split(".").map(Number);
- if(p.length!==4||p.some(n=>!Number.isInteger(n)||n<0||n>255))return true;
- const [a,b]=p;
- return a===0||a===10||a===127||
-  (a===169&&b===254)||(a===172&&b>=16&&b<=31)||
-  (a===192&&b===168)||(a===100&&b>=64&&b<=127)||a>=224;
-}
-
-function isPrivateIPv6(ip){
- const s=ip.toLowerCase();
- return s==="::"||s==="::1"||s.startsWith("fc")||
-  s.startsWith("fd")||s.startsWith("fe8")||
-  s.startsWith("fe9")||s.startsWith("fea")||
-  s.startsWith("feb")||s.startsWith("ff")||
-  s.startsWith("::ffff:")||s.startsWith("2001:db8:");
-}
-
-async function validatePublicUrl(raw){
- const target=new URL(raw);
- if(!["http:","https:"].includes(target.protocol)||
-  target.username||target.password||
-  (target.port&&!["80","443"].includes(target.port))){
-  throw new Error("Invalid URL");
- }
-
- const host=target.hostname.toLowerCase();
- if(!host||host==="localhost"||host.endsWith(".localhost")||
-  host.endsWith(".local")||host.endsWith(".internal")||
-  host.endsWith(".test")||host==="metadata.google.internal"){
-  throw new Error("Private host");
- }
-
- if(net.isIP(host)===4){
-  if(isPrivateIPv4(host))throw new Error("Private IP");
- }else if(net.isIP(host)===6){
-  if(isPrivateIPv6(host))throw new Error("Private IP");
- }else{
-  const addresses=await dns.lookup(host,{all:true,verbatim:true});
-  if(!addresses.length||addresses.some(a=>{
-   const v=net.isIP(a.address);
-   return v===4?isPrivateIPv4(a.address):
-    v===6?isPrivateIPv6(a.address):true;
-  }))throw new Error("Private address");
- }
- return target;
-}
-
-app.post("/api/fetch",async(req,res)=>{
- let target;
- try{
-  target=await validatePublicUrl(String(req.body?.url||""));
- }catch{
-  return res.status(400).json({error:"Enter a valid public HTTP or HTTPS website address."});
- }
-
- try{
-  const response=await fetch(target,{
-   redirect:"error",
-   signal:AbortSignal.timeout(10000),
-   headers:{"User-Agent":"Mozilla/5.0"}
-  });
-  if(!response.ok)return res.status(502).json({error:"Website returned HTTP "+response.status});
-
-  const type=response.headers.get("content-type")||"";
-  if(!/^(text\/html|text\/plain|application\/xhtml\+xml)(;|$)/i.test(type)){
-   return res.status(415).json({error:"Only HTML and text pages are supported."});
-  }
-  if(!response.body)return res.status(502).json({error:"No content returned."});
-
-  const reader=response.body.getReader();
-  const chunks=[];
-  let size=0;
-  while(true){
-   const {done,value}=await reader.read();
-   if(done)break;
-   size+=value.byteLength;
-   if(size>1_000_000){
-    await reader.cancel();
-    return res.status(413).json({error:"Page exceeds the 1 MB limit."});
-   }
-   chunks.push(value);
-  }
-
-  let source=Buffer.concat(chunks).toString("utf8");
-  if(type.startsWith("text/plain"))source="<pre>"+escapeHtml(source)+"</pre>";
-
-  const m=source.match(/<title[^>]*>([\s\S]*?)<\/title>/i);
-  const title=m?m[1].replace(/<[^>]*>/g,"").slice(0,200):target.hostname;
-
-  const html=sanitizeHtml(source,{
-   allowedTags:[
-    "h1","h2","h3","h4","h5","h6","p","div","span","br","hr",
-    "ul","ol","li","blockquote","pre","code","strong","b","em","i",
-    "u","s","table","thead","tbody","tr","th","td","a","img"
-   ],
-   allowedAttributes:{
-    a:["href","title"],img:["src","alt","width","height"],
-    th:["colspan","rowspan"],td:["colspan","rowspan"]
-   },
-   allowedSchemes:["http","https"],
-   transformTags:{
-    a:(tag,attrs)=>{
-     let href="";
-     try{
-      const u=new URL(attrs.href||"",target.href);
-      if(["http:","https:"].includes(u.protocol))href=u.href;
-     }catch{}
-     return {tagName:tag,attribs:{
-      ...(href?{href}:{}),...(attrs.title?{title:attrs.title}:{})
-     }};
-    },
-    img:(tag,attrs)=>{
-     let src="";
-     try{
-      const u=new URL(attrs.src||"",target.href);
-      if(["http:","https:"].includes(u.protocol))src=u.href;
-     }catch{}
-     return {tagName:tag,attribs:{
-      ...(src?{src}:{}),...(attrs.alt?{alt:attrs.alt}:{})
-     }};
-    }
-   }
-  });
-
-  res.json({url:target.href,title,html});
- }catch{
-  res.status(502).json({error:"Couldn't load that website. It may require JavaScript or block proxy requests."});
- }
-});
-
-app.listen(PORT,"0.0.0.0",()=>{
- console.log("Google-style search running on port "+PORT);
-});
+   try {
+    url = new URL(
+     match[1].replace(/&amp;/g, "&"),
+     "https
