@@ -474,3 +474,6 @@ function updateClock() {
 
 updateClock();
 setInterval(updateClock, 30000);
+app.listen(PORT, "0.0.0.0", () => {
+  console.log("Desktop OS running on port " + PORT);
+});
