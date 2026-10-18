@@ -253,11 +253,6 @@ function openSite(raw) {
 </script>
 </body>
 </html>`;
-Keep Part 1. Copy Part 2 below and place it immediately after the last line of Part 1.
-
-Part 2 of 2 — Server and search
-
-javascript
 
 app.get("/", (_req, res) => res.type("html").send(page));
 
