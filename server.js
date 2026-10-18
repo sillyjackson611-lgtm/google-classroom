@@ -252,7 +252,14 @@ function openSite(raw) {
 }
 </script>
 </body>
-</html>`;app.get("/", (_req, res) => res.type("html").send(page));
+</html>`;
+Keep Part 1. Copy Part 2 below and place it immediately after the last line of Part 1.
+
+Part 2 of 2 — Server and search
+
+javascript
+
+app.get("/", (_req, res) => res.type("html").send(page));
 
 app.get("/api/search", async (req, res) => {
  const q = String(req.query.q || "").trim().slice(0,200);
@@ -280,4 +287,195 @@ app.get("/api/search", async (req, res) => {
    try {
     url = new URL(
      match[1].replace(/&amp;/g, "&"),
-     "https
+     "https://html.duckduckgo.com"
+    );
+
+    const destination = url.searchParams.get("uddg");
+    if (destination) url = new URL(destination);
+
+    if (!["http:","https:"].includes(url.protocol)) continue;
+   } catch {
+    continue;
+   }
+
+   const title = match[2]
+    .replace(/<[^>]*>/g, "")
+    .replace(/&amp;/g, "&")
+    .replace(/&quot;/g, '"')
+    .replace(/&#x27;|&#39;/g, "'")
+    .replace(/&lt;/g, "<")
+    .replace(/&gt;/g, ">");
+
+   results.push({
+    title: title.slice(0,300),
+    url: url.href,
+    snippet: ""
+   });
+  }
+
+  res.json({results});
+ } catch {
+  res.status(502).json({
+   error: "Search is temporarily unavailable. Try again shortly."
+  });
+ }
+});
+
+app.get("/health", (_req,res) => res.json({ok:true}));
+
+app.listen(PORT, "0.0.0.0", () => {
+ console.log("Desktop OS running on port " + PORT);
+});document.addEventListener("click", e => {
+ const app = e.target.closest("[data-app]");
+ if (app) showApp(app.dataset.app);
+
+ const site = e.target.closest("[data-site]");
+ if (site) openSite(site.dataset.site);
+
+ const close = e.target.closest("[data-close]");
+ if (close) hideApp(close.dataset.close);
+
+ const min = e.target.closest("[data-min]");
+ if (min) hideApp(min.dataset.min);
+
+ const max = e.target.closest("[data-max]");
+ if (max) {
+  const el = document.getElementById(max.dataset.max);
+  if (!el) return;
+
+  if (el.dataset.maxed === "yes") {
+   const p = positions.get(el.id);
+   if (p) Object.assign(el.style, p);
+   el.dataset.maxed = "no";
+  } else {
+   positions.set(el.id, {
+    left: el.style.left || getComputedStyle(el).left,
+    top: el.style.top || getComputedStyle(el).top,
+    width: el.style.width || getComputedStyle(el).width,
+    height: el.style.height || getComputedStyle(el).height
+   });
+
+   Object.assign(el.style, {
+    left:"0", top:"0", width:"100%", height:"calc(100% - 54px)"
+   });
+   el.dataset.maxed = "yes";
+  }
+  el.style.zIndex = ++topZ;
+ }
+
+ if (e.target.closest("#startButton")) {
+  $("#startMenu").classList.toggle("open");
+ }
+});
+
+$("#browserBack").addEventListener("click", () => showApp("home"));
+
+$("#browserForm").addEventListener("submit", e => {
+ e.preventDefault();
+ openSite($("#address").value);
+});
+
+$("#searchForm").addEventListener("submit", async e => {
+ e.preventDefault();
+
+ const q = $("#searchInput").value.trim();
+ if (!q) return;
+
+ if (/^(https?:\/\/)?[\w.-]+\.[a-z]{2,}(\/.*)?$/i.test(q)) {
+  openSite(q);
+  return;
+ }
+
+ $("#searchResults").textContent = "Searching...";
+
+ try {
+  const r = await fetch("/api/search?q=" + encodeURIComponent(q));
+  const data = await r.json();
+  if (!r.ok) throw Error(data.error || "Search failed");
+
+  const results = $("#searchResults");
+  results.replaceChildren();
+
+  const heading = document.createElement("h2");
+  heading.textContent = "Search results";
+  results.append(heading);
+
+  for (const item of data.results) {
+   const article = document.createElement("article");
+   const a = document.createElement("a");
+
+   a.href = item.url;
+   a.target = "_blank";
+   a.rel = "noopener noreferrer";
+   a.textContent = item.title;
+
+   const p = document.createElement("p");
+   p.textContent = item.snippet;
+
+   article.append(a,p);
+   results.append(article);
+  }
+
+  if (!data.results.length) results.append("No results found.");
+ } catch (err) {
+  $("#searchResults").textContent = err.message || "Search is unavailable.";
+ }
+});
+
+$("#wallpaper").addEventListener("click", () => {
+ const d = $(".desktop");
+
+ d.style.background = d.dataset.alt === "yes"
+  ? "linear-gradient(135deg,#10172b,#182b4c,#111827)"
+  : "linear-gradient(135deg,#102d35,#146b65,#543f91)";
+
+ d.dataset.alt = d.dataset.alt === "yes" ? "no" : "yes";
+});
+
+document.querySelectorAll(".titlebar").forEach(bar => {
+ let sx, sy, ox, oy, moving = false;
+
+ bar.addEventListener("pointerdown", e => {
+  if (e.target.closest("button")) return;
+
+  const win = bar.closest(".window");
+  if (win.dataset.maxed === "yes") return;
+
+  moving = true;
+  sx = e.clientX;
+  sy = e.clientY;
+  ox = win.offsetLeft;
+  oy = win.offsetTop;
+  win.style.zIndex = ++topZ;
+
+  bar.setPointerCapture(e.pointerId);
+ });
+
+ bar.addEventListener("pointermove", e => {
+  if (!moving) return;
+
+  const win = bar.closest(".window");
+
+  win.style.left = Math.max(
+   0, Math.min(innerWidth - win.offsetWidth, ox + e.clientX - sx)
+  ) + "px";
+
+  win.style.top = Math.max(
+   0, Math.min(innerHeight - 100, oy + e.clientY - sy)
+  ) + "px";
+ });
+
+ bar.addEventListener("pointerup", () => moving = false);
+ bar.addEventListener("pointercancel", () => moving = false);
+});
+
+function updateClock() {
+ $("#clock").textContent = new Date().toLocaleString([], {
+  weekday: "short",
+  hour: "2-digit",
+  minute: "2-digit"
+ });
+}
+
+updateClock();
+setInterval(updateClock, 30000);
